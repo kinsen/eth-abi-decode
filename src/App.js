@@ -1,8 +1,9 @@
 import React, { Component } from 'react';
-import { Button, Input, Row, Col } from 'antd';
+import { message, Button, Input, Row, Col } from 'antd';
 import ReactJson from 'react-json-view';
 import InputDataDecoder from "ethereum-input-data-decoder";
 import { ethers } from "ethers";
+import method from "./helpers/method";
 import logo from './logo.svg';
 import './App.css';
 
@@ -10,7 +11,7 @@ const { TextArea } = Input;
 
 const decodeInput = (abi, data) => {
     // https://github.com/miguelmota/ethereum-input-data-decoder
-    const decoder = new InputDataDecoder([abi]);
+    const decoder = new InputDataDecoder(abi);
     const result = decoder.decodeData(data);
     const resp = {};
     for (var i = 0; i < result.names.length; i++) {
@@ -30,6 +31,9 @@ const decodeInput = (abi, data) => {
         resp[`${result.names[i]}(${data_type})`] = data;
     }
     return resp;
+}
+function isDict(v) {
+    return typeof v === 'object' && v !== null && !(v instanceof Array) && !(v instanceof Date);
 }
 
 const decodeOuput = (abi, data) => {
@@ -58,6 +62,9 @@ const decodeOuput = (abi, data) => {
     }
     return resp;
 }
+
+
+
 class App extends Component {
 
     constructor(props) {
@@ -70,7 +77,16 @@ class App extends Component {
     }
 
     abi = () => {
-        return JSON.parse(this.input.current.resizableTextArea.props.value);
+        var abi = JSON.parse(this.input.current.resizableTextArea.props.value);
+        if (isDict(abi)) {
+            if (abi.type && abi.inputs && abi.name)
+                abi = [abi];
+            else
+                abi = Object.values(abi);
+        }
+        if (!Array.isArray(abi))
+            abi = [abi];
+        return abi;
     }
 
     data = () => {
@@ -78,14 +94,43 @@ class App extends Component {
     }
 
     onDecodeInputClick = () => {
-        var result = decodeInput(this.abi(), this.data());
-        this.setState({ result: result });
-        console.log(result);
+        try {
+            var data = this.data();
+            this.method_id = data.slice(0, 10);
+            var abi = method.getAbiByMethodId(this.abi(), this.method_id);
+            var result = decodeInput([abi], data);
+            this.setState({ result: { method: abi.name, inputs: result } });
+            console.log(result);
+        } catch (err) {
+            message.error(err.toString());
+        }
     }
     onDecodeOutputClick = () => {
-        var result = decodeOuput(this.abi(), this.data());
-        this.setState({ result: result });
-        console.log(result);
+        try {
+            var abi = this.abi();
+            if (Array.isArray(abi)) {
+                if (this.method_id) {
+                    abi = method.getAbiByMethodId(this.abi(), this.method_id);
+                } else
+                    abi = abi[0]
+            }
+            var result = decodeOuput(abi, this.data());
+            this.setState({ result: { method: abi.name, outputs: result } });
+            console.log(result);
+        } catch (err) {
+            message.error(err.toString());
+        }
+    }
+
+    onMethodClick = () => {
+
+        try {
+            var abi = this.abi();
+            var result = method.getMethodId(abi);
+            this.setState({ result });
+        } catch (err) {
+            message.error(err.toString());
+        }
     }
 
     render() {
@@ -95,6 +140,7 @@ class App extends Component {
                 <Col span={24}>
                     <Button onClick={this.onDecodeInputClick}>Decode Input</Button>
                     <Button onClick={this.onDecodeOutputClick}>Decode Output</Button>
+                    <Button onClick={this.onMethodClick}>MethodIds</Button>
                 </Col>
             </Row>
             <Row gutter={16}>

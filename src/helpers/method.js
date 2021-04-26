@@ -36,4 +36,4 @@ const getAbiByMethodId = (abi, method_id) => {
     return null;
 }
 
-module.exports = { getMethodId, getAbiByMethodId };
+export default { getMethodId, getAbiByMethodId };
